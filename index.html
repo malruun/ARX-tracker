@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARX - Overtime Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--we-bg:#FFFBEB;--we-border:#D97706}
+@media(prefers-color-scheme:dark){:root{--we-bg:#2A1F00;--we-border:#B45309}}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1a18;--surface:#242422;--border:rgba(255,255,255,0.1);--text:#e8e6de;--muted:#9c9a92;--hint:#6b6b67}}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:1rem}
+.wrap{max-width:680px;margin:0 auto}
+
+/* Banner */
+.banner{border-radius:var(--radius);overflow:hidden;background:linear-gradient(135deg,#6B9FE0,#52B896);margin-bottom:1rem}
+@media(prefers-color-scheme:dark){.banner{background:linear-gradient(135deg,#1E3A6E,#0F4D3A)}}
+.banner-inner{padding:1rem 1.25rem;display:flex;flex-direction:column;gap:10px}
+.banner-title{font-size:16px;font-weight:500;color:#fff;text-align:center;letter-spacing:.02em}
+.banner-divider{width:100%;height:0.5px;background:rgba(255,255,255,0.3)}
+.banner-bottom{display:flex;align-items:center;gap:12px}
+.avatar{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:500;font-size:13px;color:#fff;flex-shrink:0}
+.banner-name{font-size:15px;font-weight:500;color:#fff}
+
+/* Status */
+.status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:1rem}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--hint);flex-shrink:0}
+.dot.ok{background:#1d9e75}.dot.err{background:#e24b4a}
+
+/* Card */
+.card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem}
+.card-title{font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:1rem}
+
+/* Readonly */
+.ro-banner{display:none;text-align:center;font-size:12px;background:#EEF2FF;color:#3730A3;padding:6px 12px;border-radius:var(--rsm);margin-bottom:1rem}
+
+/* Form */
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+input{width:100%;padding:8px 10px;font-size:14px;border:0.5px solid var(--border);border-radius:var(--rsm);background:var(--bg);color:var(--text);outline:none}
+input:focus{border-color:#4f46e5;box-shadow:0 0 0 2px rgba(79,70,229,.15)}
+input[readonly]{color:var(--muted);cursor:default}
+.btn{padding:8px 18px;font-size:14px;font-weight:500;border-radius:var(--rsm);cursor:pointer;border:0.5px solid var(--border);background:transparent;color:var(--text)}
+.btn-primary{background:#4f46e5;color:#fff;border-color:#4f46e5;width:100%;margin-top:10px}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed}
+.btn-sm{padding:5px 12px;font-size:12px}
+.err{font-size:12px;color:#e24b4a;margin-top:6px;min-height:18px}
+
+/* Metrics */
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1rem}
+.metric{border-radius:var(--rsm);padding:.85rem 1rem;text-align:center}
+.metric-lbl{font-size:11px;margin-bottom:4px;font-weight:500}
+.metric-val{font-size:22px;font-weight:500}
+.m1{background:#EEF2FF;border:0.5px solid #C7D2FE}.m1 .metric-lbl{color:#4338CA}.m1 .metric-val{color:#3730A3}
+.m2{background:#F0FDF4;border:0.5px solid #BBF7D0}.m2 .metric-lbl{color:#15803D}.m2 .metric-val{color:#166534}
+.m3{background:#FFF7ED;border:0.5px solid #FED7AA}.m3 .metric-lbl{color:#C2410C}.m3 .metric-val{color:#9A3412}
+@media(prefers-color-scheme:dark){
+  .m1{background:#1E1B4B;border-color:#3730A3}.m1 .metric-lbl{color:#A5B4FC}.m1 .metric-val{color:#C7D2FE}
+  .m2{background:#052E16;border-color:#166534}.m2 .metric-lbl{color:#86EFAC}.m2 .metric-val{color:#BBF7D0}
+  .m3{background:#431407;border-color:#9A3412}.m3 .metric-lbl{color:#FDBA74}.m3 .metric-val{color:#FED7AA}
+}
+@media(max-width:500px){.metrics{gap:6px}.metric{padding:.6rem .5rem}.metric-val{font-size:18px}.metric-lbl{font-size:10px}}
+
+/* Toolbar */
+.toolbar{display:flex;justify-content:flex-end;margin-bottom:.75rem}
+.empty{text-align:center;padding:2rem;color:var(--hint);font-size:13px}
+
+/* Entry table */
+.et{width:100%;border-collapse:collapse;font-size:12px}
+.et th{
+  font-size:11px;color:var(--muted);font-weight:500;
+  padding:6px 6px 8px;
+  border-bottom:0.5px solid var(--border);
+  text-align:center !important;
+}
+.et td{padding:8px 6px;border-bottom:0.5px solid var(--border);vertical-align:middle;text-align:center}
+.et .grp-last td{border-bottom:2px solid var(--border)}
+.et tr:last-child td{border-bottom:none}
+
+/* Specific cells */
+.td-date{font-weight:500;vertical-align:middle !important;text-align:center !important;border-right:0.5px solid var(--border)}
+.td-time{text-align:center !important}
+.time-wrap{justify-content:center}
+.td-hrs{color:#4338CA !important;font-weight:500;text-align:center !important}
+.td-proj{text-align:center !important}
+.td-daily{font-weight:500;color:#166534 !important;font-size:12px;text-align:center !important;vertical-align:middle !important;border-left:0.5px solid var(--border);white-space:nowrap}
+
+/* Weekend */
+.wk{background:var(--we-bg) !important}
+@media(prefers-color-scheme:dark){.wk{background:var(--we-bg) !important}}
+.wk-badge{display:inline-block;font-size:9px;background:#D97706;color:#fff;border-radius:3px;padding:1px 4px;margin-left:3px}
+
+/* Time + del */
+.time-wrap{display:flex;align-items:center;gap:6px}
+.del{background:none;border:0.5px solid var(--border);border-radius:5px;color:var(--hint);cursor:pointer;font-size:10px;padding:2px 5px;flex-shrink:0;line-height:1}
+.del:hover{color:#e24b4a;border-color:#e24b4a}
+
+/* Project badge */
+.pb{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:500}
+
+/* Tabs */
+.tabs{display:flex;gap:8px;margin-bottom:1rem}
+.tab{padding:6px 14px;border-radius:var(--rsm);border:0.5px solid var(--border);font-size:13px;cursor:pointer;background:transparent;color:var(--muted)}
+.tab.active{background:#4f46e5;color:#fff;border-color:#4f46e5}
+
+/* Summary table */
+.sum-wrap{width:100%;overflow-x:auto}
+.st{width:100%;border-collapse:collapse;font-size:13px}
+.st th{text-align:left;padding:7px 8px;color:var(--muted);font-weight:500;border-bottom:0.5px solid var(--border);font-size:11px}
+.st td{padding:8px 8px;border-bottom:0.5px solid var(--border)}
+.st tr:last-child td{border-bottom:none}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500;background:#EEF2FF;color:#3730A3}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="banner">
+    <div class="banner-inner">
+      <div class="banner-title">ARX — Overtime Tracker</div>
+      <div class="banner-divider"></div>
+      <div class="banner-bottom">
+        <div class="avatar">KA</div>
+        <div class="banner-name">Kemal Arun</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ro-banner" id="ro-banner">👁 View only — you cannot add or delete entries</div>
+  <div class="status"><div class="dot" id="dot"></div><span id="status-txt">Connecting…</span></div>
+
+  <div class="card" id="log-form" style="display:none">
+    <div class="card-title">Log overtime</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div><label>Date</label><input type="date" id="inp-date"></div>
+      <div><label>Hours</label><input type="text" id="inp-hours" readonly placeholder="—"></div>
+      <div><label>Start</label><input type="time" id="inp-start" step="60"></div>
+      <div><label>End</label><input type="time" id="inp-end" step="60"></div>
+    </div>
+    <div><label>Project / reason</label><input type="text" id="inp-project" placeholder="e.g. Sprint delivery, Client deadline…"></div>
+    <button class="btn btn-primary" id="btn-add" onclick="addEntry()" disabled>Add entry</button>
+    <div class="err" id="err-msg"></div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric m1"><div class="metric-lbl">Total hours</div><div class="metric-val" id="m-total">—</div></div>
+    <div class="metric m2"><div class="metric-lbl">This week</div><div class="metric-val" id="m-week">—</div></div>
+    <div class="metric m3"><div class="metric-lbl">This month</div><div class="metric-val" id="m-month">—</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">All entries</div>
+    <div class="toolbar"><button class="btn btn-sm" id="btn-export" onclick="exportExcel()" disabled>↓ Export to Excel</button></div>
+    <div class="empty" id="log-empty">No entries yet.</div>
+    <div id="log-body"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Summary</div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('weekly',this)">Weekly</button>
+      <button class="tab" onclick="switchTab('monthly',this)">Monthly</button>
+    </div>
+    <div class="empty" id="sum-empty">No data yet.</div>
+    <div class="sum-wrap">
+      <table class="st" id="sum-table" style="display:none">
+        <thead><tr><th id="sum-head" style="width:36%">Week</th><th style="width:24%">Total hrs</th><th style="width:40%">Top project</th></tr></thead>
+        <tbody id="sum-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+<script>
+const SB_URL='https://dvdyghxirznptvhvtonl.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2ZHlnaHhpcnpucHR2aHZ0b25sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMjU4ODEsImV4cCI6MjA5MjYwMTg4MX0.FOo5j2bC6YMnWw3QgF7fOXTMQoLmmB7WkuOCo-YWVrM';
+const HDRS={'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'};
+const READ_ONLY=new URLSearchParams(window.location.search).get('key')!=='arx2026';
+
+const PROJ_COLORS=[
+  {bg:'#DCFCE7',color:'#166534'},{bg:'#FEF3C7',color:'#92400E'},
+  {bg:'#EDE9FE',color:'#5B21B6'},{bg:'#FCE7F3',color:'#9D174D'},
+  {bg:'#E0F2FE',color:'#0369A1'},{bg:'#FEE2E2',color:'#991B1B'},
+  {bg:'#F0FDF4',color:'#14532D'},{bg:'#FFF7ED',color:'#9A3412'}
+];
+const pcMap={};let pcIdx=0;
+function getPC(p){if(!pcMap[p]){pcMap[p]=PROJ_COLORS[pcIdx%PROJ_COLORS.length];pcIdx++;}return pcMap[p];}
+function isWE(d){const day=new Date(d+'T00:00:00').getDay();return day===0||day===6;}
+function weBadge(d){const day=new Date(d+'T00:00:00').getDay();return day===6?'Sat':day===0?'Sun':null;}
+
+let entries=[];
+let sumMode='weekly';
+
+async function api(method,path,body){
+  const res=await fetch(`${SB_URL}/rest/v1/${path}`,{method,headers:HDRS,body:body?JSON.stringify(body):undefined});
+  if(!res.ok)throw new Error(await res.text());
+  return res.status===204?null:res.json();
+}
+
+async function load(){
+  setStatus('loading');
+  try{
+    const data=await api('GET','entries?order=date.desc,start_time.asc&select=*');
+    entries=data.map(r=>({id:r.id,date:r.date,start:r.start_time,end:r.end_time,hrs:parseFloat(r.hours),project:r.project||'—'}));
+    setStatus('ok');
+    if(READ_ONLY){
+      document.getElementById('ro-banner').style.display='';
+      document.getElementById('log-form').style.display='none';
+      document.getElementById('btn-export').style.display='none';
+    } else {
+      document.getElementById('log-form').style.display='';
+      document.getElementById('btn-add').disabled=false;
+    }
+    render();
+  }catch(e){setStatus('err',e.message);}
+}
+
+async function addEntry(){
+  const date=document.getElementById('inp-date').value;
+  const start=fmt(document.getElementById('inp-start').value);
+  const end=fmt(document.getElementById('inp-end').value);
+  const project=document.getElementById('inp-project').value.trim();
+  if(!date)return showErr('Please select a date.');
+  if(!start||!end)return showErr('Please enter start and end times.');
+  const hrs=calcH(start,end);
+  if(!hrs||hrs<=0)return showErr('Invalid time range.');
+  document.getElementById('btn-add').disabled=true;
+  try{
+    const [row]=await api('POST','entries',{date,start_time:start,end_time:end,hours:parseFloat(hrs.toFixed(2)),project:project||'—'});
+    entries.unshift({id:row.id,date,start,end,hrs,project:project||'—'});
+    entries.sort((a,b)=>b.date.localeCompare(a.date)||a.start.localeCompare(b.start));
+    document.getElementById('inp-start').value='';
+    document.getElementById('inp-end').value='';
+    document.getElementById('inp-project').value='';
+    document.getElementById('inp-hours').value='';
+    showErr('');render();
+  }catch(e){showErr('Save failed: '+e.message);}
+  document.getElementById('btn-add').disabled=false;
+}
+
+async function deleteEntry(id){
+  if(!confirm('Delete this entry?'))return;
+  try{await api('DELETE',`entries?id=eq.${id}`);entries=entries.filter(e=>e.id!==id);render();}
+  catch(e){alert('Delete failed: '+e.message);}
+}
+
+function fmt(t){return t?t.slice(0,5):'';}
+function calcH(s,e){
+  const[sh,sm]=s.split(':').map(Number),[eh,em]=e.split(':').map(Number);
+  let d=(eh*60+em)-(sh*60+sm);
+  if(d<=0)d+=1440;
+  return d>0&&d<=1440?d/60:null;
+}
+function recalc(){
+  const s=document.getElementById('inp-start').value,e=document.getElementById('inp-end').value;
+  if(s&&e){const h=calcH(fmt(s),fmt(e));document.getElementById('inp-hours').value=h&&h>0?h.toFixed(1)+' hrs':'';}
+}
+document.getElementById('inp-start').addEventListener('change',recalc);
+document.getElementById('inp-end').addEventListener('change',recalc);
+document.getElementById('inp-date').value=new Date().toISOString().slice(0,10);
+function showErr(m){document.getElementById('err-msg').textContent=m;}
+function setStatus(s,m){
+  const dot=document.getElementById('dot'),txt=document.getElementById('status-txt');
+  if(s==='ok'){dot.className='dot ok';txt.textContent='Connected';}
+  else if(s==='err'){dot.className='dot err';txt.textContent='Error: '+(m||'');}
+  else{dot.className='dot';txt.textContent='Connecting…';}
+}
+
+function getWK(d){const dt=new Date(d+'T00:00:00'),day=dt.getDay(),m=new Date(dt);m.setDate(dt.getDate()-(day===0?6:day-1));return m.toISOString().slice(0,10);}
+function getMo(d){return d.slice(0,7);}
+function fmtWK(k){const s=new Date(k+'T00:00:00'),e=new Date(s);e.setDate(s.getDate()+6);return`${s.getMonth()+1}/${s.getDate()} – ${e.getMonth()+1}/${e.getDate()}`;}
+function fmtMo(k){const[y,m]=k.split('-');return new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});}
+function topProj(list){const c={};list.forEach(e=>{if(e.project!=='—')c[e.project]=(c[e.project]||0)+e.hrs;});let top='—',max=0;Object.entries(c).forEach(([k,v])=>{if(v>max){max=v;top=k;}});return top;}
+
+function render(){
+  const today=new Date().toISOString().slice(0,10);
+  const total=entries.reduce((s,e)=>s+e.hrs,0);
+  document.getElementById('m-total').textContent=total.toFixed(1);
+  document.getElementById('m-week').textContent=entries.filter(e=>getWK(e.date)===getWK(today)).reduce((s,e)=>s+e.hrs,0).toFixed(1);
+  document.getElementById('m-month').textContent=entries.filter(e=>e.date.startsWith(today.slice(0,7))).reduce((s,e)=>s+e.hrs,0).toFixed(1);
+
+  const has=entries.length>0;
+  document.getElementById('btn-export').disabled=!has;
+  document.getElementById('log-empty').style.display=has?'none':'';
+
+  if(has){
+    const dm={};
+    entries.forEach(e=>{if(!dm[e.date])dm[e.date]=[];dm[e.date].push(e);});
+    const dates=Object.keys(dm).sort().reverse();
+    let rows='';
+    dates.forEach((date,di)=>{
+      const grp=dm[date];
+      const tot=grp.reduce((s,e)=>s+e.hrs,0);
+      const we=isWE(date);
+      const badge=weBadge(date);
+      const wc=we?'wk':'';
+      grp.forEach((e,i)=>{
+        const pc=getPC(e.project);
+        const pb=`<span class="pb" style="background:${pc.bg};color:${pc.color}">${e.project}</span>`;
+        const del=READ_ONLY?'':` <button class="del" onclick="deleteEntry('${e.id}')">✕</button>`;
+        const timeCell=`<div class="time-wrap">${del}<span>${e.start}–${e.end}</span></div>`;
+        const isLast=i===grp.length-1;
+        const grpLastCls=isLast&&di<dates.length-1?' grp-last':'';
+        if(i===0){
+          const dl=`${date}${badge?`<br><span class="wk-badge">${badge}</span>`:''}`;
+          rows+=`<tr class="${wc}">
+            <td class="td-date ${wc}" rowspan="${grp.length}">${dl}</td>
+            <td class="td-time ${wc}${grpLastCls}">${timeCell}</td>
+            <td class="td-hrs ${wc}${grpLastCls}" style="color:#4338CA;font-weight:500;text-align:center">${e.hrs.toFixed(1)}</td>
+            <td class="td-proj ${wc}${grpLastCls}">${pb}</td>
+            <td class="td-daily ${wc}" rowspan="${grp.length}" style="color:#166634;font-weight:500;text-align:center;vertical-align:middle;border-left:0.5px solid var(--border);white-space:nowrap">${tot.toFixed(1)} hrs</td>
+          </tr>`;
+        } else {
+          rows+=`<tr class="${wc}${grpLastCls}">
+            <td class="td-time ${wc}">${timeCell}</td>
+            <td class="td-hrs ${wc}" style="color:#4338CA;font-weight:500;text-align:center">${e.hrs.toFixed(1)}</td>
+            <td class="td-proj ${wc}">${pb}</td>
+          </tr>`;
+        }
+      });
+    });
+    document.getElementById('log-body').innerHTML=`
+      <table class="et">
+        <thead><tr>
+          <th style="width:22%;text-align:center">Date</th>
+          <th style="width:28%;text-align:center">Time</th>
+          <th style="width:10%;text-align:center">Hrs</th>
+          <th style="width:22%;text-align:center">Project</th>
+          <th style="width:18%;text-align:center">Daily total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } else {
+    document.getElementById('log-body').innerHTML='';
+  }
+  renderSummary();
+}
+
+function renderSummary(){
+  const groups={};
+  entries.forEach(e=>{const k=sumMode==='weekly'?getWK(e.date):getMo(e.date);if(!groups[k])groups[k]=[];groups[k].push(e);});
+  const keys=Object.keys(groups).sort().reverse();
+  document.getElementById('sum-head').textContent=sumMode==='weekly'?'Week':'Month';
+  const has=keys.length>0;
+  document.getElementById('sum-empty').style.display=has?'none':'';
+  document.getElementById('sum-table').style.display=has?'':'none';
+  if(has){
+    document.getElementById('sum-body').innerHTML=keys.map(k=>{
+      const list=groups[k],hrs=list.reduce((s,e)=>s+e.hrs,0);
+      const label=sumMode==='weekly'?fmtWK(k):fmtMo(k);
+      return`<tr><td>${label}</td><td>${hrs.toFixed(1)} hrs</td><td><span class="badge">${topProj(list)}</span></td></tr>`;
+    }).join('');
+  }
+}
+
+function switchTab(mode,btn){
+  sumMode=mode;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  renderSummary();
+}
+
+function exportExcel(){
+  if(!entries.length)return;
+  const wb=XLSX.utils.book_new();
+  const ws={};
+  const GREEN='1A7A4A',GL='D6EDDF',HBG='1A7A4A',ALT='F2F2F2',WKE='FFF3CD',W='FFFFFF',BK='000000',GT='1A7A4A';
+  function tb(){const s={style:'thin',color:{rgb:'BBBBBB'}};return{top:s,bottom:s,left:s,right:s};}
+  function ms(bg,color,bold,align){return{alignment:{horizontal:align||'left',vertical:'center'},font:{bold:!!bold,color:{rgb:color||BK},name:'Calibri',sz:11},fill:{patternType:'solid',fgColor:{rgb:bg||W}},border:tb()};}
+  function sc(r,c,v,style){const a=XLSX.utils.encode_cell({r,c});ws[a]={v,t:typeof v==='number'?'n':'s',s:style};}
+  const dm={};
+  entries.forEach(e=>{if(!dm[e.date])dm[e.date]=[];dm[e.date].push(e);});
+  const dates=Object.keys(dm).sort().reverse();
+  ws['!merges']=[];
+  sc(0,0,'ARX - Overtime Tracker',ms(HBG,W,true,'center'));
+  for(let c=1;c<=4;c++)sc(0,c,'',ms(HBG,W,true,'center'));
+  ws['!merges'].push({s:{r:0,c:0},e:{r:0,c:4}});
+  ['Date','Time (Start - End)','Hours','Daily Total','Project'].forEach((h,c)=>{sc(1,c,h,ms(GREEN,W,true,'center'));});
+  let r=2;let shade=false;
+  dates.forEach(date=>{
+    const grp=dm[date];
+    const tot=grp.reduce((s,e)=>s+e.hrs,0);
+    const we=isWE(date);
+    const bg=we?WKE:(shade?ALT:W);
+    const gr=r;
+    grp.forEach((e,i)=>{
+      const fd=new Date(e.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      sc(r,0,i===0?fd:'',ms(bg,BK,i===0));
+      sc(r,1,`${e.start} – ${e.end}`,ms(bg,BK,false));
+      sc(r,2,e.hrs.toFixed(2)+' hrs',ms(bg,BK,false));
+      sc(r,3,i===0?tot.toFixed(2)+' hrs':'',ms(GL,GT,true,'center'));
+      sc(r,4,e.project,ms(bg,BK,false));
+      r++;
+    });
+    if(grp.length>1)ws['!merges'].push({s:{r:gr,c:3},e:{r:r-1,c:3}});
+    shade=!shade;
+  });
+  sc(r,0,'TOTAL OVERTIME HOURS',ms(HBG,W,true));
+  sc(r,1,'',ms(HBG,W,true));
+  sc(r,2,entries.reduce((s,e)=>s+e.hrs,0).toFixed(2)+' hrs',ms(HBG,W,true));
+  sc(r,3,'',ms(HBG,W,true));
+  sc(r,4,'',ms(HBG,W,true));
+  ws['!merges'].push({s:{r,c:0},e:{r,c:1}});
+  ws['!cols']=[{wch:10},{wch:20},{wch:12},{wch:14},{wch:22}];
+  ws['!rows']=[{hpt:24},{hpt:18}];
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r,c:4}});
+  XLSX.utils.book_append_sheet(wb,ws,'Overtime Report');
+  XLSX.writeFile(wb,`ARX_Overtime_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+load();
+</script>
+</body>
+</html>
